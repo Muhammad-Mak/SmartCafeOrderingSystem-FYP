@@ -4,6 +4,8 @@ using SmartCafeOrderingSystem_Api_V2.Context;
 using SmartCafeOrderingSystem_Api_V2.Models;
 using Microsoft.EntityFrameworkCore;
 
+
+
 namespace SmartCafeOrderingSystem_Api_V2.Controllers
 {
     [Route("api/[controller]")]
@@ -72,6 +74,34 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
             {
                 Message = "New User Registered"
             });
+        }
+       
+        [HttpDelete("delete/{userId}")]
+        public async Task<IActionResult> DeleteUser(int userId, [FromQuery] int requestingUserId)
+        {
+            var requestingUser = await dbContext.Users.FindAsync(requestingUserId);
+            if (requestingUser == null)
+            {
+                return Unauthorized(new { Message = "Invalid Requesting User" });
+            }
+
+            var userToDelete = await dbContext.Users.FindAsync(userId);
+            if (userToDelete == null)
+            {
+                return NotFound(new { Message = "User not found" });
+            }
+
+            // Regular user can only delete their own account
+            if (requestingUser.Role == 0 && requestingUser.UserID != userToDelete.UserID)
+            {
+                return Forbid("You can only delete your own account.");
+            }
+
+            // Admin can delete any user account
+            dbContext.Users.Remove(userToDelete);
+            await dbContext.SaveChangesAsync();
+
+            return Ok(new { Message = "User deleted successfully" });
         }
     }
 }
