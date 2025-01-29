@@ -1,0 +1,6 @@
+@SmartCafeOrderingSystem_Api_V2_HostAddress = http://localhost:5083
+
+GET {{SmartCafeOrderingSystem_Api_V2_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
