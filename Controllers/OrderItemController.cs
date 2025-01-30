@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCafeOrderingSystem_Api_V2.Context;
+using SmartCafeOrderingSystem_Api_V2.DTOs;
 using SmartCafeOrderingSystem_Api_V2.Models;
 
 //Contains get all order items
@@ -25,71 +26,97 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
 
         // GET: api/OrderItem
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<OrderItem>>> GetOrderItems()
+        public async Task<ActionResult<IEnumerable<OrderItemDTO>>> GetOrderItems()
         {
-            return await _dbContext.OrderItems
+            var orderItems = await _dbContext.OrderItems
                 .Include(oi => oi.MenuItem)
                 .Include(oi => oi.Order)
-                .ToListAsync();
+                .Select(oi => new OrderItemDTO
+                {
+                    OrderItemID = oi.OrderItemID,
+                    OrderID = oi.OrderID,
+                    ItemID = oi.ItemID,
+                    ItemName = oi.MenuItem.Name,
+                    Quantity = oi.Quantity,
+                    Subtotal = oi.Subtotal
+                }).ToListAsync();
+
+            return Ok(orderItems);
         }
 
         // GET: api/OrderItem/{id}
         [HttpGet("{id}")]
-        public async Task<ActionResult<OrderItem>> GetOrderItem(int id)
+        public async Task<ActionResult<OrderItemDTO>> GetOrderItem(int id)
         {
             var orderItem = await _dbContext.OrderItems
                 .Include(oi => oi.MenuItem)
                 .Include(oi => oi.Order)
-                .FirstOrDefaultAsync(oi => oi.OrderItemID == id);
+                .Where(oi => oi.OrderItemID == id)
+                .Select(oi => new OrderItemDTO
+                {
+                    OrderItemID = oi.OrderItemID,
+                    OrderID = oi.OrderID,
+                    ItemID = oi.ItemID,
+                    ItemName = oi.MenuItem.Name,
+                    Quantity = oi.Quantity,
+                    Subtotal = oi.Subtotal
+                }).FirstOrDefaultAsync();
 
             if (orderItem == null)
             {
                 return NotFound(new { Message = "Order item not found" });
             }
 
-            return orderItem;
+            return Ok(orderItem);
         }
 
         // POST: api/OrderItem
         [HttpPost]
-        public async Task<ActionResult<OrderItem>> CreateOrderItem(OrderItem orderItem)
+        public async Task<ActionResult<OrderItemDTO>> CreateOrderItem([FromBody] OrderItemDTO orderItemDTO)
         {
-            if (orderItem == null || orderItem.Quantity <= 0)
+            if (orderItemDTO == null || orderItemDTO.Quantity <= 0)
             {
                 return BadRequest(new { Message = "Invalid order item data" });
             }
 
-            var menuItem = await _dbContext.MenuItems.FindAsync(orderItem.ItemID);
+            var menuItem = await _dbContext.MenuItems.FindAsync(orderItemDTO.ItemID);
             if (menuItem == null)
             {
                 return BadRequest(new { Message = "Invalid menu item ID" });
             }
 
-            var order = await _dbContext.Orders.FindAsync(orderItem.OrderID);
+            var order = await _dbContext.Orders.FindAsync(orderItemDTO.OrderID);
             if (order == null)
             {
                 return BadRequest(new { Message = "Invalid order ID" });
             }
 
-            // Calculate subtotal
-            orderItem.Subtotal = menuItem.Price * orderItem.Quantity;
+            var orderItem = new OrderItem
+            {
+                OrderID = orderItemDTO.OrderID,
+                ItemID = orderItemDTO.ItemID,
+                Quantity = orderItemDTO.Quantity,
+                Subtotal = menuItem.Price * orderItemDTO.Quantity
+            };
 
             _dbContext.OrderItems.Add(orderItem);
             await _dbContext.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetOrderItem), new { id = orderItem.OrderItemID }, orderItem);
+            return CreatedAtAction(nameof(GetOrderItem), new { id = orderItem.OrderItemID }, orderItemDTO);
         }
 
         // PUT: api/OrderItem/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateOrderItem(int id, OrderItem orderItem)
+        public async Task<IActionResult> UpdateOrderItem(int id, [FromBody] OrderItemDTO orderItemDTO)
         {
-            if (id != orderItem.OrderItemID)
+            var orderItem = await _dbContext.OrderItems.FindAsync(id);
+            if (orderItem == null)
             {
-                return BadRequest(new { Message = "Order item ID mismatch" });
+                return NotFound(new { Message = "Order item not found" });
             }
 
-            _dbContext.Entry(orderItem).State = EntityState.Modified;
+            orderItem.Quantity = orderItemDTO.Quantity;
+            orderItem.Subtotal = orderItemDTO.Subtotal;
 
             try
             {
@@ -97,14 +124,7 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!_dbContext.OrderItems.Any(e => e.OrderItemID == id))
-                {
-                    return NotFound(new { Message = "Order item not found" });
-                }
-                else
-                {
-                    throw;
-                }
+                return Conflict(new { Message = "Concurrency conflict occurred while updating the order item" });
             }
 
             return NoContent();

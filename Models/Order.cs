@@ -33,9 +33,9 @@ namespace SmartCafeOrderingSystem_Api_V2.Models
         public string PaymentStatus { get; set; } = "Pending"; // Paid or Pending
 
         // Relationships
-        public User User { get; set; } = null!; // Navigation property for the user who placed the order
-        public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>(); // List of items in the order
-        public Payment Payment { get; set; } = null!; // Associated payment record
+        public User? User { get; set; } = null!; // Navigation property for the user who placed the order
+        public ICollection<OrderItem>? OrderItems { get; set; } = new List<OrderItem>(); // List of items in the order
+        public Payment? Payment { get; set; } = null!; // Associated payment record
     }
 
 }

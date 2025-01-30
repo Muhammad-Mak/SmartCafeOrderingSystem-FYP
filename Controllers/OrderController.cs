@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCafeOrderingSystem_Api_V2.Context;
+using SmartCafeOrderingSystem_Api_V2.DTOs;
 using SmartCafeOrderingSystem_Api_V2.Models;
 
 // contains get all orders
@@ -26,88 +27,108 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
 
         // GET: api/Order
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
+        public async Task<ActionResult<IEnumerable<OrderDTO>>> GetOrders()
         {
-            return await _dbContext.Orders
+            var orders = await _dbContext.Orders
                 .Include(o => o.User)
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.MenuItem)
-                .ToListAsync();
+                .Select(o => new OrderDTO
+                {
+                    OrderID = o.OrderID,
+                    UserID = o.UserID,
+                    OrderDate = o.OrderDate,
+                    OrderType = o.OrderType,
+                    TableNumber = o.TableNumber,
+                    TotalAmount = o.TotalAmount,
+                    Status = o.Status,
+                    PaymentStatus = o.PaymentStatus
+                }).ToListAsync();
+
+            return Ok(orders);
         }
 
         // GET: api/Order/{id}
         [HttpGet("{id}")]
-        public async Task<ActionResult<Order>> GetOrder(int id)
+        public async Task<ActionResult<OrderDTO>> GetOrder(int id)
         {
             var order = await _dbContext.Orders
                 .Include(o => o.User)
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.MenuItem)
-                .FirstOrDefaultAsync(o => o.OrderID == id);
+                .Where(o => o.OrderID == id)
+                .Select(o => new OrderDTO
+                {
+                    OrderID = o.OrderID,
+                    UserID = o.UserID,
+                    OrderDate = o.OrderDate,
+                    OrderType = o.OrderType,
+                    TableNumber = o.TableNumber,
+                    TotalAmount = o.TotalAmount,
+                    Status = o.Status,
+                    PaymentStatus = o.PaymentStatus
+                }).FirstOrDefaultAsync();
 
             if (order == null)
             {
                 return NotFound(new { Message = "Order not found" });
             }
 
-            return order;
+            return Ok(order);
         }
 
         // GET: api/Order/user/{userId}
         [HttpGet("user/{userId}")]
-        public async Task<ActionResult<IEnumerable<Order>>> GetUserOrders(int userId)
+        public async Task<ActionResult<IEnumerable<OrderDTO>>> GetUserOrders(int userId)
         {
             var orders = await _dbContext.Orders
                 .Where(o => o.UserID == userId)
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.MenuItem)
-                .ToListAsync();
+                .Select(o => new OrderDTO
+                {
+                    OrderID = o.OrderID,
+                    UserID = o.UserID,
+                    OrderDate = o.OrderDate,
+                    OrderType = o.OrderType,
+                    TableNumber = o.TableNumber,
+                    TotalAmount = o.TotalAmount,
+                    Status = o.Status,
+                    PaymentStatus = o.PaymentStatus
+                }).ToListAsync();
 
             if (!orders.Any())
             {
                 return NotFound(new { Message = "No orders found for this user" });
             }
 
-            return orders;
+            return Ok(orders);
         }
 
         // POST: api/Order
         [HttpPost]
-        public async Task<ActionResult<Order>> CreateOrder(Order order)
+        public async Task<ActionResult<OrderDTO>> CreateOrder([FromBody] OrderDTO orderDTO)
         {
-            if (order == null || order.OrderItems == null || !order.OrderItems.Any())
+            if (orderDTO == null)
             {
                 return BadRequest(new { Message = "Invalid order data" });
             }
 
-            // Check if user exists
-            var userExists = await _dbContext.Users.AnyAsync(u => u.UserID == order.UserID);
-            if (!userExists)
+            var order = new Order
             {
-                return BadRequest(new { Message = "Invalid user ID" });
-            }
-
-            // Calculate total amount
-            decimal totalAmount = 0;
-            foreach (var item in order.OrderItems)
-            {
-                var menuItem = await _dbContext.MenuItems.FindAsync(item.ItemID);
-                if (menuItem == null)
-                {
-                    return BadRequest(new { Message = $"MenuItem with ID {item.ItemID} not found" });
-                }
-                item.Subtotal = menuItem.Price * item.Quantity;
-                totalAmount += item.Subtotal;
-            }
-
-            order.TotalAmount = totalAmount;
-            order.Status = "Placed"; // Default status
-            order.PaymentStatus = "Pending";
+                UserID = orderDTO.UserID,
+                OrderDate = DateTime.UtcNow,
+                OrderType = orderDTO.OrderType,
+                TableNumber = orderDTO.TableNumber,
+                TotalAmount = orderDTO.TotalAmount,
+                Status = "Placed",
+                PaymentStatus = "Pending"
+            };
 
             _dbContext.Orders.Add(order);
             await _dbContext.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetOrder), new { id = order.OrderID }, order);
+            return CreatedAtAction(nameof(GetOrder), new { id = order.OrderID }, orderDTO);
         }
 
         // PUT: api/Order/{id}/status

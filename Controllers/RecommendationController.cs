@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCafeOrderingSystem_Api_V2.Context;
+using SmartCafeOrderingSystem_Api_V2.DTOs;
 using SmartCafeOrderingSystem_Api_V2.Models;
 
 //Contains get all recommendations
@@ -25,70 +26,92 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
 
         // GET: api/Recommendation
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Recommendation>>> GetRecommendations()
+        public async Task<ActionResult<IEnumerable<RecommendationDTO>>> GetRecommendations()
         {
-            return await _dbContext.Recommendations
+            var recommendations = await _dbContext.Recommendations
                 .Include(r => r.Item1)
                 .Include(r => r.Item2)
-                .ToListAsync();
+                .Select(r => new RecommendationDTO
+                {
+                    RecommendationID = r.RecommendationID,
+                    ItemID1 = r.ItemID1,
+                    ItemName1 = r.Item1.Name,
+                    ItemID2 = r.ItemID2,
+                    ItemName2 = r.Item2.Name,
+                    Score = r.Score
+                }).ToListAsync();
+
+            return Ok(recommendations);
         }
 
         // GET: api/Recommendation/{itemId}
         [HttpGet("{itemId}")]
-        public async Task<ActionResult<IEnumerable<MenuItem>>> GetRecommendationsForItem(int itemId)
+        public async Task<ActionResult<IEnumerable<RecommendationDTO>>> GetRecommendationsForItem(int itemId)
         {
             var recommendations = await _dbContext.Recommendations
                 .Where(r => r.ItemID1 == itemId || r.ItemID2 == itemId)
                 .Include(r => r.Item1)
                 .Include(r => r.Item2)
                 .OrderByDescending(r => r.Score)
-                .ToListAsync();
+                .Select(r => new RecommendationDTO
+                {
+                    RecommendationID = r.RecommendationID,
+                    ItemID1 = r.ItemID1,
+                    ItemName1 = r.Item1.Name,
+                    ItemID2 = r.ItemID2,
+                    ItemName2 = r.Item2.Name,
+                    Score = r.Score
+                }).ToListAsync();
 
             if (!recommendations.Any())
             {
                 return NotFound(new { Message = "No recommendations found for this item" });
             }
 
-            // Return a list of recommended menu items
-            var recommendedItems = recommendations.Select(r =>
-                r.ItemID1 == itemId ? r.Item2 : r.Item1).Distinct().ToList();
-
-            return recommendedItems;
+            return Ok(recommendations);
         }
 
         // POST: api/Recommendation
         [HttpPost]
-        public async Task<ActionResult<Recommendation>> CreateRecommendation(Recommendation recommendation)
+        public async Task<ActionResult<RecommendationDTO>> CreateRecommendation([FromBody] RecommendationDTO recommendationDTO)
         {
-            if (recommendation == null || recommendation.ItemID1 == recommendation.ItemID2)
+            if (recommendationDTO == null || recommendationDTO.ItemID1 == recommendationDTO.ItemID2)
             {
                 return BadRequest(new { Message = "Invalid recommendation data" });
             }
 
-            var item1Exists = await _dbContext.MenuItems.AnyAsync(m => m.ItemID == recommendation.ItemID1);
-            var item2Exists = await _dbContext.MenuItems.AnyAsync(m => m.ItemID == recommendation.ItemID2);
+            var item1Exists = await _dbContext.MenuItems.AnyAsync(m => m.ItemID == recommendationDTO.ItemID1);
+            var item2Exists = await _dbContext.MenuItems.AnyAsync(m => m.ItemID == recommendationDTO.ItemID2);
 
             if (!item1Exists || !item2Exists)
             {
                 return BadRequest(new { Message = "Invalid menu item IDs" });
             }
 
+            var recommendation = new Recommendation
+            {
+                ItemID1 = recommendationDTO.ItemID1,
+                ItemID2 = recommendationDTO.ItemID2,
+                Score = recommendationDTO.Score
+            };
+
             _dbContext.Recommendations.Add(recommendation);
             await _dbContext.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetRecommendationsForItem), new { itemId = recommendation.ItemID1 }, recommendation);
+            return CreatedAtAction(nameof(GetRecommendationsForItem), new { itemId = recommendation.ItemID1 }, recommendationDTO);
         }
 
         // PUT: api/Recommendation/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateRecommendation(int id, Recommendation recommendation)
+        public async Task<IActionResult> UpdateRecommendation(int id, [FromBody] RecommendationDTO recommendationDTO)
         {
-            if (id != recommendation.RecommendationID)
+            var recommendation = await _dbContext.Recommendations.FindAsync(id);
+            if (recommendation == null)
             {
-                return BadRequest(new { Message = "Recommendation ID mismatch" });
+                return NotFound(new { Message = "Recommendation not found" });
             }
 
-            _dbContext.Entry(recommendation).State = EntityState.Modified;
+            recommendation.Score = recommendationDTO.Score;
 
             try
             {
@@ -96,14 +119,7 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!_dbContext.Recommendations.Any(e => e.RecommendationID == id))
-                {
-                    return NotFound(new { Message = "Recommendation not found" });
-                }
-                else
-                {
-                    throw;
-                }
+                return Conflict(new { Message = "Concurrency conflict occurred while updating the recommendation" });
             }
 
             return NoContent();

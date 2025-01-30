@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCafeOrderingSystem_Api_V2.Context;
+using SmartCafeOrderingSystem_Api_V2.DTOs;
 using SmartCafeOrderingSystem_Api_V2.Models;
 
 //Contains get all analyticss data
@@ -27,17 +28,36 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
 
         // GET: api/Analytics
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Analytics>>> GetAnalyticsData()
+        public async Task<ActionResult<IEnumerable<AnalyticsDTO>>> GetAnalyticsData()
         {
-            return await _dbContext.Analytics.OrderByDescending(a => a.Date).ToListAsync();
+            var analyticsData = await _dbContext.Analytics
+                .OrderByDescending(a => a.Date)
+                .Select(a => new AnalyticsDTO
+                {
+                    AnalyticsID = a.AnalyticsID,
+                    Date = a.Date,
+                    TotalSales = a.TotalSales,
+                    TotalOrders = a.TotalOrders,
+                    PopularItems = a.PopularItems
+                }).ToListAsync();
+
+            return Ok(analyticsData);
         }
 
         // GET: api/Analytics/latest
         [HttpGet("latest")]
-        public async Task<ActionResult<Analytics>> GetLatestAnalytics()
+        public async Task<ActionResult<AnalyticsDTO>> GetLatestAnalytics()
         {
             var latestAnalytics = await _dbContext.Analytics
                 .OrderByDescending(a => a.Date)
+                .Select(a => new AnalyticsDTO
+                {
+                    AnalyticsID = a.AnalyticsID,
+                    Date = a.Date,
+                    TotalSales = a.TotalSales,
+                    TotalOrders = a.TotalOrders,
+                    PopularItems = a.PopularItems
+                })
                 .FirstOrDefaultAsync();
 
             if (latestAnalytics == null)
@@ -45,7 +65,7 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
                 return NotFound(new { Message = "No analytics data found" });
             }
 
-            return latestAnalytics;
+            return Ok(latestAnalytics);
         }
 
         // GET: api/Analytics/totalsales
@@ -64,7 +84,6 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
         public async Task<ActionResult<int>> GetTotalOrders()
         {
             int totalOrders = await _dbContext.Orders.CountAsync();
-
             return Ok(new { TotalOrders = totalOrders });
         }
 
@@ -83,7 +102,7 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
                                                    .FirstOrDefault()
                 })
                 .OrderByDescending(i => i.Count)
-                .Take(5) // Top 5 popular items
+                .Take(5)
                 .ToListAsync();
 
             return Ok(popularItems);
@@ -91,17 +110,25 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
 
         // POST: api/Analytics
         [HttpPost]
-        public async Task<ActionResult<Analytics>> CreateAnalytics(Analytics analytics)
+        public async Task<ActionResult<AnalyticsDTO>> CreateAnalytics([FromBody] AnalyticsDTO analyticsDTO)
         {
-            if (analytics == null)
+            if (analyticsDTO == null)
             {
                 return BadRequest(new { Message = "Invalid analytics data" });
             }
 
+            var analytics = new Analytics
+            {
+                Date = analyticsDTO.Date,
+                TotalSales = analyticsDTO.TotalSales,
+                TotalOrders = analyticsDTO.TotalOrders,
+                PopularItems = analyticsDTO.PopularItems
+            };
+
             _dbContext.Analytics.Add(analytics);
             await _dbContext.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetLatestAnalytics), new { id = analytics.AnalyticsID }, analytics);
+            return CreatedAtAction(nameof(GetLatestAnalytics), new { id = analytics.AnalyticsID }, analyticsDTO);
         }
 
         // DELETE: api/Analytics/{id}

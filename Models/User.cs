@@ -14,7 +14,7 @@ namespace SmartCafeOrderingSystem_Api_V2.Models
         public DateTime UpdatedDate { get; set; } = DateTime.UtcNow;
 
         // Relationships
-        public ICollection<Order> Orders { get; set; } = new List<Order>();
+        public ICollection<Order>? Orders { get; set; } = new List<Order>();
     }
 
 

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCafeOrderingSystem_Api_V2.Context;
+using SmartCafeOrderingSystem_Api_V2.DTOs;
 using SmartCafeOrderingSystem_Api_V2.Models;
 
 // Contains Get all categories
@@ -25,50 +26,73 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
 
         // GET: api/MenuCategory
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<MenuCategory>>> GetMenuCategories()
+        public async Task<ActionResult<IEnumerable<MenuCategoryDTO>>> GetMenuCategories()
         {
-            return await _dbContext.MenuCategories.ToListAsync();
+            var categories = await _dbContext.MenuCategories
+                .Select(c => new MenuCategoryDTO
+                {
+                    CategoryID = c.CategoryID,
+                    CategoryName = c.CategoryName,
+                    Description = c.Description
+                }).ToListAsync();
+
+            return Ok(categories);
         }
 
         // GET: api/MenuCategory/{id}
         [HttpGet("{id}")]
-        public async Task<ActionResult<MenuCategory>> GetMenuCategory(int id)
+        public async Task<ActionResult<MenuCategoryDTO>> GetMenuCategory(int id)
         {
-            var category = await _dbContext.MenuCategories.FindAsync(id);
+            var category = await _dbContext.MenuCategories
+                .Where(c => c.CategoryID == id)
+                .Select(c => new MenuCategoryDTO
+                {
+                    CategoryID = c.CategoryID,
+                    CategoryName = c.CategoryName,
+                    Description = c.Description
+                }).FirstOrDefaultAsync();
 
             if (category == null)
             {
                 return NotFound(new { Message = "Menu Category not found" });
             }
 
-            return category;
+            return Ok(category);
         }
 
         // POST: api/MenuCategory
         [HttpPost]
-        public async Task<ActionResult<MenuCategory>> CreateMenuCategory(MenuCategory category)
+        public async Task<ActionResult<MenuCategoryDTO>> CreateMenuCategory([FromBody] MenuCategoryDTO categoryDTO)
         {
-            if (category == null || string.IsNullOrWhiteSpace(category.CategoryName))
+            if (categoryDTO == null || string.IsNullOrWhiteSpace(categoryDTO.CategoryName))
             {
                 return BadRequest(new { Message = "Invalid category data" });
             }
 
+            var category = new MenuCategory
+            {
+                CategoryName = categoryDTO.CategoryName,
+                Description = categoryDTO.Description
+            };
+
             _dbContext.MenuCategories.Add(category);
             await _dbContext.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetMenuCategory), new { id = category.CategoryID }, category);
+            return CreatedAtAction(nameof(GetMenuCategory), new { id = category.CategoryID }, categoryDTO);
         }
 
         // PUT: api/MenuCategory/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateMenuCategory(int id, MenuCategory category)
+        public async Task<IActionResult> UpdateMenuCategory(int id, [FromBody] MenuCategoryDTO categoryDTO)
         {
-            if (id != category.CategoryID)
+            var category = await _dbContext.MenuCategories.FindAsync(id);
+            if (category == null)
             {
-                return BadRequest(new { Message = "Category ID mismatch" });
+                return NotFound(new { Message = "Menu Category not found" });
             }
 
-            _dbContext.Entry(category).State = EntityState.Modified;
+            category.CategoryName = categoryDTO.CategoryName;
+            category.Description = categoryDTO.Description;
 
             try
             {
@@ -76,14 +100,7 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!_dbContext.MenuCategories.Any(e => e.CategoryID == id))
-                {
-                    return NotFound(new { Message = "Menu Category not found" });
-                }
-                else
-                {
-                    throw;
-                }
+                return Conflict(new { Message = "Concurrency conflict occurred while updating the category" });
             }
 
             return NoContent();

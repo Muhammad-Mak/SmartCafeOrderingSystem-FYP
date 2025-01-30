@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCafeOrderingSystem_Api_V2.Context;
+using SmartCafeOrderingSystem_Api_V2.DTOs;
 using SmartCafeOrderingSystem_Api_V2.Models;
 
 // Contains get all menu items
@@ -26,57 +27,100 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
 
         // GET: api/MenuItem
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<MenuItem>>> GetMenuItems()
+        public async Task<ActionResult<IEnumerable<MenuItemDTO>>> GetMenuItems()
         {
-            return await _dbContext.MenuItems.Include(m => m.Category).ToListAsync();
+            var menuItems = await _dbContext.MenuItems.Include(m => m.Category)
+                .Select(m => new MenuItemDTO
+                {
+                    ItemID = m.ItemID,
+                    Name = m.Name,
+                    Description = m.Description,
+                    Price = m.Price,
+                    ImageURL = m.ImageURL,
+                    IsPopular = m.IsPopular,
+                    CreatedDate = m.CreatedDate,
+                    CategoryID = m.CategoryID,
+                    CategoryName = m.Category.CategoryName
+                }).ToListAsync();
+
+            return Ok(menuItems);
         }
 
         // GET: api/MenuItem/{id}
         [HttpGet("{id}")]
-        public async Task<ActionResult<MenuItem>> GetMenuItem(int id)
+        public async Task<ActionResult<MenuItemDTO>> GetMenuItem(int id)
         {
             var menuItem = await _dbContext.MenuItems.Include(m => m.Category)
-                                                     .FirstOrDefaultAsync(m => m.ItemID == id);
+                .Where(m => m.ItemID == id)
+                .Select(m => new MenuItemDTO
+                {
+                    ItemID = m.ItemID,
+                    Name = m.Name,
+                    Description = m.Description,
+                    Price = m.Price,
+                    ImageURL = m.ImageURL,
+                    IsPopular = m.IsPopular,
+                    CreatedDate = m.CreatedDate,
+                    CategoryID = m.CategoryID,
+                    CategoryName = m.Category.CategoryName
+                }).FirstOrDefaultAsync();
 
             if (menuItem == null)
             {
                 return NotFound(new { Message = "Menu item not found" });
             }
 
-            return menuItem;
+            return Ok(menuItem);
         }
 
         // POST: api/MenuItem
         [HttpPost]
-        public async Task<ActionResult<MenuItem>> CreateMenuItem(MenuItem menuItem)
+        public async Task<ActionResult<MenuItemDTO>> CreateMenuItem([FromBody] MenuItemDTO menuItemDTO)
         {
-            if (menuItem == null || string.IsNullOrWhiteSpace(menuItem.Name) || menuItem.Price <= 0)
+            if (menuItemDTO == null || string.IsNullOrWhiteSpace(menuItemDTO.Name) || menuItemDTO.Price <= 0)
             {
                 return BadRequest(new { Message = "Invalid menu item data" });
             }
 
-            var categoryExists = await _dbContext.MenuCategories.AnyAsync(c => c.CategoryID == menuItem.CategoryID);
+            var categoryExists = await _dbContext.MenuCategories.AnyAsync(c => c.CategoryID == menuItemDTO.CategoryID);
             if (!categoryExists)
             {
                 return BadRequest(new { Message = "Invalid category ID" });
             }
 
+            var menuItem = new MenuItem
+            {
+                Name = menuItemDTO.Name,
+                Description = menuItemDTO.Description,
+                Price = menuItemDTO.Price,
+                ImageURL = menuItemDTO.ImageURL,
+                IsPopular = menuItemDTO.IsPopular,
+                CreatedDate = DateTime.UtcNow,
+                CategoryID = menuItemDTO.CategoryID
+            };
+
             _dbContext.MenuItems.Add(menuItem);
             await _dbContext.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetMenuItem), new { id = menuItem.ItemID }, menuItem);
+            return CreatedAtAction(nameof(GetMenuItem), new { id = menuItem.ItemID }, menuItemDTO);
         }
 
         // PUT: api/MenuItem/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateMenuItem(int id, MenuItem menuItem)
+        public async Task<IActionResult> UpdateMenuItem(int id, [FromBody] MenuItemDTO menuItemDTO)
         {
-            if (id != menuItem.ItemID)
+            var menuItem = await _dbContext.MenuItems.FindAsync(id);
+            if (menuItem == null)
             {
-                return BadRequest(new { Message = "Menu item ID mismatch" });
+                return NotFound(new { Message = "Menu item not found" });
             }
 
-            _dbContext.Entry(menuItem).State = EntityState.Modified;
+            menuItem.Name = menuItemDTO.Name;
+            menuItem.Description = menuItemDTO.Description;
+            menuItem.Price = menuItemDTO.Price;
+            menuItem.ImageURL = menuItemDTO.ImageURL;
+            menuItem.IsPopular = menuItemDTO.IsPopular;
+            menuItem.CategoryID = menuItemDTO.CategoryID;
 
             try
             {
@@ -84,14 +128,7 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!_dbContext.MenuItems.Any(e => e.ItemID == id))
-                {
-                    return NotFound(new { Message = "Menu item not found" });
-                }
-                else
-                {
-                    throw;
-                }
+                return Conflict(new { Message = "Concurrency conflict occurred while updating the menu item" });
             }
 
             return NoContent();
@@ -115,9 +152,23 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
 
         // GET: api/MenuItem/popular
         [HttpGet("popular")]
-        public async Task<ActionResult<IEnumerable<MenuItem>>> GetPopularMenuItems()
+        public async Task<ActionResult<IEnumerable<MenuItemDTO>>> GetPopularMenuItems()
         {
-            return await _dbContext.MenuItems.Where(m => m.IsPopular).ToListAsync();
+            var popularItems = await _dbContext.MenuItems.Where(m => m.IsPopular)
+                .Select(m => new MenuItemDTO
+                {
+                    ItemID = m.ItemID,
+                    Name = m.Name,
+                    Description = m.Description,
+                    Price = m.Price,
+                    ImageURL = m.ImageURL,
+                    IsPopular = m.IsPopular,
+                    CreatedDate = m.CreatedDate,
+                    CategoryID = m.CategoryID,
+                    CategoryName = m.Category.CategoryName
+                }).ToListAsync();
+
+            return Ok(popularItems);
         }
     }
 }

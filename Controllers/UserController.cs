@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using SmartCafeOrderingSystem_Api_V2.Context;
 using SmartCafeOrderingSystem_Api_V2.Models;
 using Microsoft.EntityFrameworkCore;
+using SmartCafeOrderingSystem_Api_V2.DTOs;
 
 
 
@@ -19,11 +20,11 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Authenticate([FromBody] User userObj)
+        public async Task<IActionResult> Authenticate([FromBody] UserDTO userObj)
         {
             if (userObj == null)
             {
-                return BadRequest();
+                return BadRequest(new { Message = "Invalid login data" });
             }
 
             var user = await dbContext.Users.FirstOrDefaultAsync(x => x.Username == userObj.Username && x.PasswordHash == userObj.PasswordHash);
@@ -31,51 +32,57 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
             {
                 return NotFound(new { status = false, Message = "User not Found" });
             }
-            if (user.Role == 0)
-            {
-                return Ok(new
-                {
-                    status = true,
-                    Message = "Logged in!",
-                    data = user,
-                    admin = false,
-                    username = userObj.Username
-                });
-            }
+
             return Ok(new
             {
                 status = true,
                 Message = "Logged in!",
-                data = user,
-                admin = true,
-                username = userObj.Username
+                data = new UserDTO
+                {
+                    UserID = user.UserID,
+                    Username = user.Username,
+                    Email = user.Email,
+                    PhoneNumber = user.PhoneNumber,
+                    Role = user.Role,
+                    CreatedDate = user.CreatedDate,
+                    UpdatedDate = user.UpdatedDate
+                },
+                admin = user.Role != 0,
+                username = user.Username
             });
-
         }
 
         [HttpPost("signup")]
-        public async Task<IActionResult> SignUpUser([FromBody] User userObj)
+        public async Task<IActionResult> SignUpUser([FromBody] UserDTO userObj)
         {
-            var user = await dbContext.Users.FirstOrDefaultAsync(x => x.Username == userObj.Username);
-            if (userObj == null)
+            if (userObj == null || string.IsNullOrWhiteSpace(userObj.Username) || string.IsNullOrWhiteSpace(userObj.Email))
             {
-                return BadRequest();
+                return BadRequest(new { Message = "Invalid user data" });
             }
-            else if (user != null)
+
+            var existingUser = await dbContext.Users.FirstOrDefaultAsync(x => x.Username == userObj.Username);
+            if (existingUser != null)
             {
                 return BadRequest(new { Message = "User Already Exists" });
             }
 
-
-            await dbContext.Users.AddAsync(userObj);
-
-            await dbContext.SaveChangesAsync();
-            return Ok(new
+            var newUser = new User
             {
-                Message = "New User Registered"
-            });
+                Username = userObj.Username,
+                Email = userObj.Email,
+                PhoneNumber = userObj.PhoneNumber,
+                PasswordHash = userObj.PasswordHash, // Ensure proper hashing before storing
+                Role = 0, // Default role as customer
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+
+            await dbContext.Users.AddAsync(newUser);
+            await dbContext.SaveChangesAsync();
+
+            return Ok(new { Message = "New User Registered" });
         }
-       
+
         [HttpDelete("delete/{userId}")]
         public async Task<IActionResult> DeleteUser(int userId, [FromQuery] int requestingUserId)
         {
@@ -91,13 +98,11 @@ namespace SmartCafeOrderingSystem_Api_V2.Controllers
                 return NotFound(new { Message = "User not found" });
             }
 
-            // Regular user can only delete their own account
             if (requestingUser.Role == 0 && requestingUser.UserID != userToDelete.UserID)
             {
-                return Forbid("You can only delete your own account.");
+                return Forbid();
             }
 
-            // Admin can delete any user account
             dbContext.Users.Remove(userToDelete);
             await dbContext.SaveChangesAsync();
 

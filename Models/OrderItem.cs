@@ -11,8 +11,8 @@ namespace SmartCafeOrderingSystem_Api_V2.Models
         public decimal Subtotal { get; set; }
 
         // Relationships
-        public Order Order { get; set; } = null!;
-        public MenuItem MenuItem { get; set; } = null!;
+        public Order? Order { get; set; } = null!;
+        public MenuItem? MenuItem { get; set; } = null!;
     }
 
 }

@@ -14,9 +14,9 @@ namespace SmartCafeOrderingSystem_Api_V2.Models
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
 
         // Relationships
-        public MenuCategory Category { get; set; } = null!;
-        public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
-        public ICollection<Recommendation> Recommendations { get; set; } = new List<Recommendation>();
+        public MenuCategory? Category { get; set; } = null!;
+        public ICollection<OrderItem>? OrderItems { get; set; } = new List<OrderItem>();
+        public ICollection<Recommendation>? Recommendations { get; set; } = new List<Recommendation>();
     }
 
 }

@@ -10,6 +10,6 @@ namespace SmartCafeOrderingSystem_Api_V2.Models
         public string? Description { get; set; }
 
         // Relationships
-        public ICollection<MenuItem> MenuItems { get; set; } = new List<MenuItem>();
+        public ICollection<MenuItem>? MenuItems { get; set; } = new List<MenuItem>();
     }
 }
